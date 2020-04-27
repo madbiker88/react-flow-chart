@@ -2,15 +2,18 @@ import * as React from 'react'
 import {
   CanvasInnerDefault, CanvasOuterDefault, CanvasWrapper, ICanvasInnerDefaultProps, ICanvasOuterDefaultProps, IChart, IConfig, ILink,
   ILinkDefaultProps, INodeDefaultProps, INodeInnerDefaultProps, IOnCanvasClick, IOnCanvasDrop, IOnDeleteKey, IOnDragCanvas,
-  IOnDragNode, IOnLinkCancel, IOnLinkClick, IOnLinkComplete, IOnLinkMouseEnter,
-  IOnLinkMouseLeave, IOnLinkMove, IOnLinkStart, IOnNodeClick, IOnNodeSizeChange, IOnPortPositionChange, IPortDefaultProps,
-  IPortsDefaultProps, ISelectedOrHovered, LinkDefault, LinkWrapper, NodeDefault, NodeInnerDefault, NodeWrapper, PortDefault, PortsDefault,
+  IOnDragCanvasStop, IOnDragNode, IOnDragNodeStop, IOnLinkCancel, IOnLinkClick, IOnLinkComplete, IOnLinkMouseEnter,
+  IOnLinkMouseLeave, IOnLinkMove, IOnLinkStart, IOnNodeClick, IOnNodeDoubleClick, IOnNodeMouseEnter, IOnNodeMouseLeave, IOnNodeSizeChange,
+  IOnPortPositionChange, IOnZoomCanvas, IPortDefaultProps, IPortsDefaultProps, ISelectedOrHovered, LinkDefault, LinkWrapper, NodeDefault, NodeInnerDefault, NodeWrapper, PortDefault, PortsDefault,
 } from '../../'
+import { getMatrix } from './utils/grid'
 
 export interface IFlowChartCallbacks {
   onDragNode: IOnDragNode
+  onDragNodeStop: IOnDragNodeStop
   onDragCanvas: IOnDragCanvas
   onCanvasDrop: IOnCanvasDrop
+  onDragCanvasStop: IOnDragCanvasStop
   onLinkStart: IOnLinkStart
   onLinkMove: IOnLinkMove
   onLinkComplete: IOnLinkComplete
@@ -22,7 +25,11 @@ export interface IFlowChartCallbacks {
   onCanvasClick: IOnCanvasClick
   onDeleteKey: IOnDeleteKey
   onNodeClick: IOnNodeClick
+  onNodeDoubleClick: IOnNodeDoubleClick
+  onNodeMouseEnter: IOnNodeMouseEnter
+  onNodeMouseLeave: IOnNodeMouseLeave
   onNodeSizeChange: IOnNodeSizeChange
+  onZoomCanvas: IOnZoomCanvas
 }
 
 export interface IFlowChartComponents {
@@ -63,7 +70,9 @@ export const FlowChart = (props: IFlowChartProps) => {
     chart,
     callbacks: {
       onDragNode,
+      onDragNodeStop,
       onDragCanvas,
+      onDragCanvasStop,
       onCanvasDrop,
       onLinkStart,
       onLinkMove,
@@ -76,7 +85,11 @@ export const FlowChart = (props: IFlowChartProps) => {
       onCanvasClick,
       onDeleteKey,
       onNodeClick,
+      onNodeDoubleClick,
+      onNodeMouseEnter,
+      onNodeMouseLeave,
       onNodeSizeChange,
+      onZoomCanvas,
     },
     Components: {
       CanvasOuter = CanvasOuterDefault,
@@ -91,9 +104,9 @@ export const FlowChart = (props: IFlowChartProps) => {
   } = props
   const { links, nodes, selected, hovered, offset } = chart
 
-  const canvasCallbacks = { onDragCanvas, onCanvasClick, onDeleteKey, onCanvasDrop }
+  const canvasCallbacks = { onDragCanvas, onDragCanvasStop, onCanvasClick, onDeleteKey, onCanvasDrop, onZoomCanvas }
   const linkCallbacks = { onLinkMouseEnter, onLinkMouseLeave, onLinkClick }
-  const nodeCallbacks = { onDragNode, onNodeClick, onNodeSizeChange }
+  const nodeCallbacks = { onDragNode, onNodeClick, onDragNodeStop, onNodeMouseEnter, onNodeMouseLeave, onNodeSizeChange,onNodeDoubleClick }
   const portCallbacks = { onPortPositionChange, onLinkStart, onLinkMove, onLinkComplete, onLinkCancel }
 
   const nodesInView = Object.keys(nodes).filter((nodeId) => {
@@ -106,6 +119,8 @@ export const FlowChart = (props: IFlowChartProps) => {
     return x + offset.x + size.width > 0 && x + offset.x < canvasSize.width &&
       y + offset.y + size.height > 0 && y + offset.y < canvasSize.height
   })
+
+  const matrix = config.smartRouting ? getMatrix(chart.offset, Object.values(nodesInView.map((nodeId) => nodes[nodeId]))) : undefined
 
   const linksInView = Object.keys(links).filter((linkId) => {
     const from = links[linkId].from
@@ -122,14 +137,15 @@ export const FlowChart = (props: IFlowChartProps) => {
     <CanvasWrapper
       config={config}
       position={chart.offset}
+      scale={chart.scale}
       ComponentInner={CanvasInner}
       ComponentOuter={CanvasOuter}
       onSizeChange={(width, height) => setCanvasSize({ width, height })}
       {...canvasCallbacks}
     >
       { linksInView.map((linkId) => {
-        const isSelected = selected.type === 'link' && selected.id === linkId
-        const isHovered = hovered.type === 'link' && hovered.id === linkId
+        const isSelected = !config.readonly && selected.type === 'link' && selected.id === linkId
+        const isHovered = !config.readonly && hovered.type === 'link' && hovered.id === linkId
         const fromNodeId = links[linkId].from.nodeId
         const toNodeId = links[linkId].to.nodeId
 
@@ -143,6 +159,7 @@ export const FlowChart = (props: IFlowChartProps) => {
             isHovered={isHovered}
             fromNode={nodes[fromNodeId]}
             toNode={toNodeId ? nodes[toNodeId] : undefined}
+            matrix={matrix}
             {...linkCallbacks}
           />
         )
